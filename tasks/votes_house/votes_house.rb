@@ -57,8 +57,7 @@ class VotesHouse
     es_failures = []
     missing_bioguide_ids = []
     missing_bill_ids = []
-    missing_amendment_ids = []
-
+    
     batcher = [] # ES batch indexing
 
     legislators = {}
@@ -90,7 +89,6 @@ class VotesHouse
       
       bill_type, bill_number = bill_code_for doc
       bill_id = (bill_type and bill_number) ? "#{bill_type}#{bill_number}-#{session}" : nil
-      amendment_id = amendment_id_for doc, bill_id
       
       voter_ids, voters = votes_for doc, legislators, missing_bioguide_ids
       roll_type = doc.at("vote-question").inner_text
@@ -139,17 +137,6 @@ class VotesHouse
         end
       end
       
-      if amendment_id
-        if amendment = Amendment.where(:amendment_id => amendment_id).only(Amendment.basic_fields).first
-          vote.attributes = {
-            :amendment_id => amendment_id,
-            :amendment => Utils.amendment_for(amendment)
-          }
-        else
-          missing_amendment_ids << {:roll_id => roll_id, :amendment_id => amendment_id}
-        end
-      end
-      
       vote.save!
 
       # replicate it in ElasticSearch
@@ -175,10 +162,6 @@ class VotesHouse
       Report.warning self, "Found #{missing_bill_ids.size} missing bill_id's while processing votes.", {missing_bill_ids: missing_bill_ids}
     end
     
-    if missing_amendment_ids.any?
-      Report.warning self, "Found #{missing_amendment_ids.size} missing amendment_id's while processing votes.", {missing_amendment_ids: missing_amendment_ids}
-    end
-
     Report.success self, "Successfully synced #{count} House roll call votes for #{year}"
   end
 
@@ -334,14 +317,6 @@ class VotesHouse
       end
     else
       nil
-    end
-  end
-  
-  def self.amendment_id_for(doc, bill_id)
-    if bill_id and (elem = doc.at("amendment-num"))
-      if result = Amendment.where(:bill_id => bill_id, :bill_sequence => elem.text.to_i).only(:amendment_id).first
-        result['amendment_id']
-      end
     end
   end
   

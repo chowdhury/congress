@@ -57,8 +57,7 @@ class VotesSenate
     es_failures = []
     missing_legislators = []
     missing_bill_ids = []
-    missing_amendment_ids = []
-
+    
     batcher = [] # ES batch indexer
 
     # will be referenced by LIS ID as a cache built up as we parse through votes
@@ -81,7 +80,6 @@ class VotesSenate
       
 
       bill_id = bill_id_for doc, session
-      amendment_id = amendment_id_for doc, session
       voter_ids, voters = votes_for doc, legislators, missing_legislators
 
       roll_type = doc.at("question").text
@@ -126,18 +124,6 @@ class VotesSenate
         end
       end
       
-      # for now, only bother with amendments on bills
-      if bill_id and amendment_id
-        if amendment = Amendment.where(:amendment_id => amendment_id).only(Amendment.basic_fields).first
-          vote.attributes = {
-            :amendment_id => amendment_id,
-            :amendment => Utils.amendment_for(amendment)
-          }
-        else
-          missing_amendment_ids << {:roll_id => roll_id, :amendment_id => amendment_id}
-        end
-      end
-      
       vote.save!
 
       # replicate it in ElasticSearch
@@ -162,10 +148,6 @@ class VotesSenate
       Report.warning self, "Found #{missing_bill_ids.size} missing bill_id's while processing votes.", missing_bill_ids: missing_bill_ids
     end
     
-    if missing_amendment_ids.any?
-      Report.warning self, "Found #{missing_amendment_ids.size} missing amendment_id's while processing votes.", missing_amendment_ids: missing_amendment_ids
-    end
-
     Report.success self, "Successfully synced #{count} Senate roll call votes for #{year}"
   end
 
@@ -290,16 +272,6 @@ class VotesSenate
     bill.save!
     
     bill
-  end
-  
-  def self.amendment_id_for(doc, session)
-    elem = doc.at 'amendment_number'
-    if elem and elem.text.present?
-      number = elem.text.gsub(/[^\d]/, '').to_i
-      "s#{number}-#{session}"
-    else
-      nil
-    end
   end
   
   def self.voted_at_for(doc)

@@ -566,12 +566,6 @@ module Utils
       end
     end
 
-    if amendment_id = attributes['amendment_id']
-      if amendment = Amendment.where(:amendment_id => amendment_id).first
-        attributes['amendment'] = Utils.amendment_for(amendment)
-      end
-    end
-
     es_batch! 'votes', vote_id, attributes, batcher, options
   end
 
