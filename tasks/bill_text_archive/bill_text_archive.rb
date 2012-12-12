@@ -44,9 +44,6 @@ class BillTextArchive
       end
       
       
-      # accumulate a massive string
-      last_bill_version_text = ""
-      
       # accumulate an array of version objects
       bill_versions = [] 
       
@@ -115,15 +112,15 @@ class BillTextArchive
         
         version_count += 1
         
-        # keep just the last version
-        last_bill_version_text = full_text 
-
         bill_versions << {
           version_code: code,
           issued_on: issued_on,
           version_name: version_name,
           bill_version_id: bill_version_id,
-          urls: urls
+          urls: urls,
+
+          # only the last version's text will ultimately be saved in ES
+          text: full_text
         }
       end
       
@@ -135,13 +132,17 @@ class BillTextArchive
       bill_versions = bill_versions.sort_by {|v| v[:issued_on]}
       
       last_version = bill_versions.last
+      last_version_text = last_version[:text].dup
       last_version_on = last_version[:issued_on]
+
+      # don't store the full text (except the last version's text  we preserved, in ES only)
+      bill_versions.each {|v| v.delete :text}
 
       versions_count = bill_versions.size
       bill_version_codes = bill_versions.map {|v| v[:version_code]}
       
 
-      unless citation_ids = Utils.citations_for(bill, last_bill_version_text, citation_cache(bill), options)
+      unless citation_ids = Utils.citations_for(bill, last_version_text, citation_cache(bill), options)
         warnings << {message: "Failed to extract citations from #{bill.bill_id}, code: #{last_version[:version_code]}"}
         citation_ids = []
       end
@@ -175,7 +176,7 @@ class BillTextArchive
 
       Utils.es_batch!('bills', bill.bill_id,
         bill_fields.merge(
-          versions: last_bill_version_text,
+          versions: last_version_text,
           updated_at: Time.now,
 
           version_codes: bill_version_codes,
