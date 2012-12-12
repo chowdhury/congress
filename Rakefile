@@ -211,3 +211,37 @@ def exception_message(exception)
   
   msg
 end
+
+namespace :elasticsearch do
+  desc "Initialize ES mapping schemas"
+  task :init => :environment do
+    single = ENV['mapping'] || ENV['only'] || nil
+    force = ENV['force'] || ENV['delete'] || false
+
+    mappings = single ? [single] : Dir.glob('config/elasticsearch/mappings/*.json').map {|dir| File.basename dir, File.extname(dir)}
+
+    host = config['elastic_search']['host']
+    port = config['elastic_search']['port']
+    index = config['elastic_search']['index']
+    index_url = "http://#{host}:#{port}/#{index}/"
+
+    system "curl -XPUT '#{index_url}'"
+    puts
+    puts "Ensured index exists" 
+    puts
+
+    mappings.each do |mapping|
+      if force
+        system "curl -XDELETE '#{index_url}/#{mapping}/_mapping'"
+        puts
+        puts "Deleted #{mapping}"
+        puts
+      end
+
+      system "curl -XPUT '#{index_url}/#{mapping}/_mapping' -d @config/elasticsearch/mappings/#{mapping}.json"
+      puts
+      puts "Created #{mapping}"
+      puts
+    end
+  end
+end
