@@ -63,15 +63,14 @@ end
 
 desc "Set the crontab in place for this environment"
 task :set_crontab => :environment do
-  environment = ENV['environment']
   current_path = ENV['current_path']
   
-  if environment.blank? or current_path.blank?
-    puts "No environment or current path given, exiting."
+  if current_path.blank?
+    puts "No current path given, exiting."
     exit
   end
   
-  if system("cat #{current_path}/config/cron/#{environment}.crontab | crontab")
+  if system("cat #{current_path}/config/crontab | crontab")
     puts "Successfully overwrote crontab."
   else
     email "Crontab overwriting failed on deploy."

@@ -1,4 +1,4 @@
-set :environment, (ENV['target'] || 'staging')
+set :environment, 'production'
 
 set :user, 'rtc'
 set :application, user
@@ -6,14 +6,7 @@ set :deploy_to, "/projects/#{user}/"
 
 set :sock, "#{user}.sock"
 
-if environment == 'api' # production api box
-  set :domain, 'ec2-50-17-0-114.compute-1.amazonaws.com' # unionstation
-elsif environment == 'backend' # production scraper box
-  set :domain, 'takoma.sunlightlabs.net' # takoma
-else # environment == 'staging'
-  set :domain, 'ec2-107-22-9-27.compute-1.amazonaws.com' # dupont
-end
-
+set :domain, 'ec2-50-17-0-114.compute-1.amazonaws.com' # unionstation
 
 # RVM stuff - not sure how/why this works, awesome
 set :rvm_ruby_string, '1.9.3-p194@rtc'
@@ -34,36 +27,27 @@ role :web, domain
 
 set :use_sudo, false
 
-# not sure why the issue
-if environment != 'staging'
-  after "deploy", "deploy:cleanup"
-end
 
 after "deploy:update_code", "deploy:shared_links"
 after "deploy:update_code", "deploy:bundle_install"
 after "deploy:update_code", "deploy:create_indexes"
 after "deploy", "deploy:set_crontab"
 
+
 namespace :deploy do
   task :start do
-    if environment != 'backend'
-      run "cd #{current_path} && unicorn -D -l #{shared_path}/#{sock} -c #{current_path}/unicorn.rb"
-    end
+    run "cd #{current_path} && unicorn -D -l #{shared_path}/#{sock} -c #{current_path}/unicorn.rb"
   end
   
   task :stop do
-    if environment != 'backend'
-      run "kill `cat #{shared_path}/unicorn.pid`"
-    end
+    run "kill `cat #{shared_path}/unicorn.pid`"
   end
   
   task :migrate do; end
   
   desc "Restart the server"
   task :restart, :roles => :app, :except => {:no_release => true} do
-    if environment != 'backend'
-      run "kill -HUP `cat #{shared_path}/unicorn.pid`"
-    end
+    run "kill -HUP `cat #{shared_path}/unicorn.pid`"
   end
   
   desc "Create indexes"
@@ -74,16 +58,13 @@ namespace :deploy do
   desc "Install Ruby gems and Python eggs"
   task :bundle_install, :roles => :app, :except => {:no_release => true} do
     run "cd #{release_path} && bundle install --local"
-    
-    if environment != 'api'
-      run "cd #{release_path} && pip install -r requirements.txt"
-    end
+    run "cd #{release_path} && pip install -r requirements.txt"
   end
   
   # current_path is correct here because this happens after deploy, not after deploy:update_code
   desc "Load the crontasks"
   task :set_crontab, :roles => :app, :except => {:no_release => true} do
-    run "cd #{current_path} && rake set_crontab environment=#{environment} current_path=#{current_path}"
+    run "cd #{current_path} && rake set_crontab current_path=#{current_path}"
   end
 
   desc "Stop the crontasks"
@@ -101,12 +82,5 @@ namespace :deploy do
     run "rm -rf #{File.join release_path, 'tmp'}"
     run "rm #{File.join release_path, 'public', 'system'}"
     run "rm #{File.join release_path, 'log'}"
-    
-    # elasticsearch files need to stay in a shared dir so that the symlink that points to them doesn't stay pointed
-    # to stale, old releases
-    if ['staging', 'elastic'].include?(environment)
-      run "cp #{release_path}/config/elasticsearch/config/#{environment}/*.yml #{shared_path}/elasticsearch/"
-      run "cp -r #{release_path}/config/elasticsearch/mappings/ #{shared_path}/elasticsearch/"
-    end
   end
 end
