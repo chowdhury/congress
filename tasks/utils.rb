@@ -43,72 +43,7 @@ module Utils
 
     batcher.clear # reset
   end
-
-  def self.citations_for(document, text, destination, options)
-
-    if File.exists?(destination) and options[:recite].blank?
-      puts "\tUsing cached citation JSON" if options[:debug]
-      body = File.read destination
-      hash = MultiJson.load body
-    else
-      url = "http://#{config['citation']['hostname']}/citation/find.json"
-      puts "\tExtracting citations..." if options[:debug]
-      curl = Curl.post url, 
-        text: CGI.escape(text), 
-        "options[excerpt]" => (options[:cite_excerpt] || 250),
-        "options[types]" => "usc,law",
-        "options[parents]" => "true"
-      body = curl.body_str
-      hash = MultiJson.load body
-      Utils.write destination, JSON.pretty_generate(hash)
-    end
-
-    puts body if ENV['cite_debug'].present?
-    
-
-    # index citations by ID: assumes they are unique even across types
-    citations = {}
-    hash['results'].each do |result|
-      id = result[result['type']]['id']
-      citations[id] ||= []
-      citations[id] << result
-    end
-
-    # document's unique key as defined in model
-    document_id = document[document.class.cite_key.to_s]
-    
-    # clear existing citations for this document
-    Citation.where(document_id: document_id).delete_all
-
-    citations.each do |citation_id, matches|
-      citation = Citation.find_or_initialize_by(
-        document_id: document_id,
-        document_type: document.class.to_s,
-        citation_id: citation_id
-      )
-      citation.citations = matches
-      citation.save!
-    end
-
-    puts "Extracted citations from #{document_id}: #{citations.keys.inspect}" if options[:debug]
-
-    citations.keys
-
-  rescue Curl::Err::ConnectionFailedError, Curl::Err::PartialFileError, 
-    Curl::Err::RecvError, Curl::Err::HostResolutionError,
-    Timeout::Error, Errno::ECONNRESET, Errno::ETIMEDOUT, 
-    Errno::ENETUNREACH, Errno::ECONNREFUSED => ex
-    puts "Error connecting to citation API"
-    nil
-  rescue Curl::Err::GotNothingError => ex
-    puts "Crashed citation API! Waiting 5 seconds..."
-    sleep 5 # wait for it to come back up
-    nil
-  rescue MultiJson::DecodeError => ex
-    puts "Got bad response back from citation API"
-    nil
-  end
-
+  
   def self.curl(url, destination = nil)
     body = begin
       curl = Curl::Easy.new url

@@ -96,10 +96,6 @@ class BillTextArchive
         full_text = full_doc.at("pre").text
         full_text = clean_text full_text
         
-        # write text to disk if asked
-        Utils.write(text_cache(bill), full_text) if options[:cache_text]
-
-
 
         # put up top here because it's the first line of debug output for a bill
         puts "[#{bill.bill_id}][#{code}] Processing..." if options[:debug]
@@ -142,12 +138,6 @@ class BillTextArchive
       bill_version_codes = bill_versions.map {|v| v[:version_code]}
       
 
-      unless citation_ids = Utils.citations_for(bill, last_version_text, citation_cache(bill), options)
-        warnings << {message: "Failed to extract citations from #{bill.bill_id}, code: #{last_version[:version_code]}"}
-        citation_ids = []
-      end
-
-
       # Update bill in Mongo
       bill.attributes = {
         version_info: bill_versions,
@@ -155,8 +145,7 @@ class BillTextArchive
         version_codes: bill_version_codes,
         versions_count: versions_count,
         last_version: last_version,
-        last_version_on: last_version_on,
-        citation_ids: citation_ids
+        last_version_on: last_version_on
       }
       bill.save!
 
@@ -182,8 +171,7 @@ class BillTextArchive
           version_codes: bill_version_codes,
           versions_count: versions_count,
           last_version: last_version,
-          last_version_on: last_version_on,
-          citation_ids: citation_ids
+          last_version_on: last_version_on
         ),
         batcher, options
       )
@@ -268,13 +256,4 @@ class BillTextArchive
     
     urls
   end
-
-  def self.citation_cache(bill)
-    "data/citation/bills/#{bill.session}/#{bill.bill_id}.json"
-  end
-
-  def self.text_cache(bill)
-    "data/citation/bills/#{bill.session}/#{bill.bill_id}.txt"
-  end
-  
 end
