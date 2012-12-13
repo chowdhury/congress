@@ -32,7 +32,7 @@ class BillTextArchive
     # used to keep batches of indexes
     batcher = []
     
-    targets.each do |bill|
+    targets.to_a.each do |bill|
       type = bill.bill_type
       
       # find all the versions of text for that bill
