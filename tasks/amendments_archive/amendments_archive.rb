@@ -37,6 +37,8 @@ class AmendmentsArchive
     if options[:limit]
       amendments = amendments.first options[:limit].to_i
     end
+
+    warnings = []
     
     amendments.each do |path|
       doc = Nokogiri::XML open(path)
@@ -97,14 +99,14 @@ class AmendmentsArchive
             amendment[:bill_sequence] = bill_sequence
           end
         else
-          Report.warning self, "[#{amendment_id}] Found bill_id #{bill_id}, but couldn't find bill."
+          warnings << [amendment_id, bill_id]
         end
       end
       
       
       if amendment.save
         count += 1
-        # puts "[#{amendment_id}] Saved successfully"
+        puts "[#{amendment_id}] Saved successfully" if options[:debug]
       else
         bad_amendments << {:attributes => amendment.attributes, :error_messages => amendment.errors.full_messages}
         puts "[#{amendment_id}] Error saving, will file report"
@@ -123,6 +125,10 @@ class AmendmentsArchive
     
     if bad_amendments.any?
       Report.failure self, "Failed to save #{bad_amendments.size} amendments. Attached the last failed amendment's attributes and errors.", :amendment => bad_amendments.last
+    end
+
+    if warnings.any?
+      Report.warning self, "Couldn't find bills for #{warnings.size} amendments", warnings: warnings
     end
     
     Report.success self, "Synced #{count} amendments for session ##{session} from GovTrack.us."
